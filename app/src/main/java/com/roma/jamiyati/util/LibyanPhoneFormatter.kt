@@ -3,8 +3,6 @@ package com.roma.jamiyati.util
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import java.net.URLEncoder
-import java.nio.charset.StandardCharsets
 
 object LibyanPhoneFormatter {
 
@@ -22,6 +20,17 @@ object LibyanPhoneFormatter {
             else -> digitsOnly
         }
         return "+218$national"
+    }
+
+    /**
+     * صيغة العرض المحلية: 091 234 5678، محاطة بعلامتي اتجاه حتى تظهر صحيحة داخل نص عربي.
+     */
+    fun formatForDisplay(rawPhone: String): String {
+        val intl = formatToLibyanInternational(rawPhone)
+        if (intl.isEmpty()) return ""
+        val local = "0" + intl.removePrefix("+218")
+        val pretty = if (local.length == 10) "${local.substring(0, 3)} ${local.substring(3, 6)} ${local.substring(6)}" else local
+        return "\u2066$pretty\u2069"
     }
 
     /**
@@ -70,7 +79,7 @@ object LibyanPhoneFormatter {
             roundNumber = roundNumber,
             installmentAmount = installmentAmount
         )
-        val encoded = URLEncoder.encode(message, StandardCharsets.UTF_8.toString())
+        val encoded = Uri.encode(message)
         val uri = Uri.parse("https://wa.me/$waNumber?text=$encoded")
         val intent = Intent(Intent.ACTION_VIEW, uri).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

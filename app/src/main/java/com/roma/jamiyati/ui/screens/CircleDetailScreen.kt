@@ -315,7 +315,7 @@ private fun LateMembersTab(
             )
         }
         itemsIndexed(lateMembers, key = { _, m -> m.id }) { _, member ->
-            val intlPhone = LibyanPhoneFormatter.formatToLibyanInternational(member.phone)
+            val displayPhone = LibyanPhoneFormatter.formatForDisplay(member.phone)
             Card(
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -334,9 +334,16 @@ private fun LateMembersTab(
                             style = MaterialTheme.typography.titleMedium
                         )
                         Text(
-                            text = "$intlPhone · ${CurrencyFormatter.formatLyd(installmentAmount)}",
+                            text = displayPhone,
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                        Text(
+                            text = "المستحق: ${CurrencyFormatter.formatLyd(installmentAmount)}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error
                         )
                     }
                     FilledTonalButton(
@@ -360,7 +367,7 @@ private fun LateMembersTab(
                     ) {
                         Icon(Icons.AutoMirrored.Rounded.Send, contentDescription = null)
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("تذكير عبر واتساب")
+                        Text("تذكير")
                     }
                 }
             }
@@ -492,9 +499,11 @@ private fun PayoutOrderTab(
                         Column(modifier = Modifier.weight(1f)) {
                             Text(member.name, style = MaterialTheme.typography.titleMedium)
                             Text(
-                                text = LibyanPhoneFormatter.formatToLibyanInternational(member.phone),
+                                text = LibyanPhoneFormatter.formatForDisplay(member.phone),
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                         IconButton(

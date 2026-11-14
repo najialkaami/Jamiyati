@@ -114,7 +114,7 @@ object PdfReportExporter {
 
             drawRtlBlock("ترتيب المشتركين والقبض", headingPaint, 6f)
             members.forEach { member ->
-                val intlPhone = LibyanPhoneFormatter.formatToLibyanInternational(member.phone)
+                val intlPhone = LibyanPhoneFormatter.formatForDisplay(member.phone)
                 drawRtlBlock(
                     "${member.payoutOrder}. ${member.name} — الهاتف: $intlPhone",
                     bodyPaint,
