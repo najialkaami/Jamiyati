@@ -1,0 +1,4 @@
+-keep class com.roma.jamiyati.util.BackupPayload { *; }
+-keep class com.roma.jamiyati.util.BackupCircle { *; }
+-keep class com.roma.jamiyati.util.BackupMember { *; }
+-keep class com.roma.jamiyati.util.BackupPayment { *; }

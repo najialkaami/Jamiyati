@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">جمعيتي</string>
+    <string name="currency_lyd">د.ل</string>
+    <string name="share_report_title">مشاركة تقرير الجمعية</string>
+    <string name="share_backup_title">مشاركة النسخة الاحتياطية</string>
+</resources>
