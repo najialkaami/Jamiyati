@@ -23,6 +23,7 @@ data class MemberFormItem(
 data class CircleEditorUiState(
     val circleId: Long? = null,
     val isEditing: Boolean = false,
+    val orderLocked: Boolean = false,
     val name: String = "",
     val installmentInput: String = "",
     val frequency: Frequency = Frequency.MONTHLY,
@@ -71,6 +72,7 @@ class CircleEditorViewModel(
                     state.copy(
                         circleId = existing.circle.id,
                         isEditing = true,
+                        orderLocked = existing.circle.orderLocked,
                         name = existing.circle.name,
                         installmentInput = if (existing.circle.installmentAmount % 1.0 == 0.0) {
                             existing.circle.installmentAmount.toLong().toString()
@@ -107,6 +109,7 @@ class CircleEditorViewModel(
     fun onStartDateChange(epochDay: Long) = _uiState.update { it.copy(startDateEpochDay = epochDay) }
 
     fun addMemberRow() {
+        if (_uiState.value.orderLocked) return
         nextLocalKey += 1
         _uiState.update {
             it.copy(members = it.members + MemberFormItem(localKey = nextLocalKey))
@@ -114,6 +117,7 @@ class CircleEditorViewModel(
     }
 
     fun removeMemberRow(localKey: Long) {
+        if (_uiState.value.orderLocked) return
         _uiState.update { state ->
             if (state.members.size <= 2) {
                 state.copy(errorMessage = "يجب أن تحتوي الجمعية على مشتركَين على الأقل")

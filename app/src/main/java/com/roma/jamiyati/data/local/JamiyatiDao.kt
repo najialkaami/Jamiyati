@@ -37,6 +37,9 @@ interface JamiyatiDao {
     @Delete
     suspend fun deleteCircle(circle: CircleEntity)
 
+    @Query("UPDATE circles SET orderLocked = 1 WHERE id = :circleId")
+    suspend fun lockOrder(circleId: Long)
+
     @Query("DELETE FROM circles WHERE id = :circleId")
     suspend fun deleteCircleById(circleId: Long)
 

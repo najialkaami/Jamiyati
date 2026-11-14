@@ -1,5 +1,6 @@
 package com.roma.jamiyati.data.local
 
+import androidx.room.ColumnInfo
 import androidx.room.Embedded
 import androidx.room.Entity
 import androidx.room.ForeignKey
@@ -14,7 +15,9 @@ data class CircleEntity(
     val installmentAmount: Double,
     val frequency: Frequency,
     val startDateEpochDay: Long,
-    val createdAtMillis: Long = System.currentTimeMillis()
+    val createdAtMillis: Long = System.currentTimeMillis(),
+    /** بعد اعتماد ترتيب القبض أو إجراء القرعة يصبح الترتيب نهائياً ولا يمكن تغييره */
+    @ColumnInfo(defaultValue = "0") val orderLocked: Boolean = false
 )
 
 @Entity(

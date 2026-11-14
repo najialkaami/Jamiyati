@@ -12,7 +12,9 @@ import java.util.Locale
 enum class RoundStatus(val labelAr: String) {
     UPCOMING("قادمة"),
     CURRENT("الحالية"),
-    DONE("مكتملة")
+    DONE("منتهية"),
+    /** جولة مضى موعدها ولم يسدّد فيها الجميع */
+    INCOMPLETE("لم يكتمل السداد")
 }
 
 data class RoundScheduleItem(
@@ -111,8 +113,8 @@ object RoundCalculator {
 
             val status = when {
                 roundNum < currentRound && allPaid -> RoundStatus.DONE
+                roundNum < currentRound -> RoundStatus.INCOMPLETE
                 roundNum == currentRound && allPaid && today.isAfter(roundDate) -> RoundStatus.DONE
-                roundNum < currentRound -> RoundStatus.DONE
                 roundNum == currentRound -> RoundStatus.CURRENT
                 else -> RoundStatus.UPCOMING
             }

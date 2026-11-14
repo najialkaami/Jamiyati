@@ -77,6 +77,7 @@ class JamiyatiRepository(
         } else {
             val existing = dao.getCircleWithDetailsOnce(circleId)
             val createdAt = existing?.circle?.createdAtMillis ?: System.currentTimeMillis()
+            val locked = existing?.circle?.orderLocked ?: false
             dao.updateCircle(
                 CircleEntity(
                     id = circleId,
@@ -84,9 +85,21 @@ class JamiyatiRepository(
                     installmentAmount = installmentAmount,
                     frequency = frequency,
                     startDateEpochDay = startDateEpochDay,
-                    createdAtMillis = createdAt
+                    createdAtMillis = createdAt,
+                    orderLocked = locked
                 )
             )
+
+            if (locked && existing != null) {
+                // الترتيب معتمد: يُسمح فقط بتعديل الاسم والهاتف، دون إضافة أو حذف أو تغيير الدور
+                val edits = normalizedMembers.filter { it.id > 0L }.associateBy { it.id }
+                val updated = existing.members.map { m ->
+                    val e = edits[m.id]
+                    if (e == null) m else m.copy(name = e.name.trim(), phone = e.phone.trim())
+                }
+                dao.updateMembers(updated)
+                return circleId
+            }
 
             val existingMemberIds = existing?.members?.map { it.id }?.toSet() ?: emptySet()
             val keptIds = normalizedMembers.mapNotNull { if (it.id > 0L) it.id else null }.toSet()
@@ -129,6 +142,8 @@ class JamiyatiRepository(
         dao.deleteCircleById(circleId)
     }
 
+    suspend fun lockOrder(circleId: Long) = dao.lockOrder(circleId)
+
     suspend fun updateMembersPayoutOrder(members: List<MemberEntity>) {
         val reindexed = members.mapIndexed { index, member ->
             member.copy(payoutOrder = index + 1)
@@ -168,7 +183,8 @@ class JamiyatiRepository(
                         frequency = Frequency.entries.firstOrNull { it.name == backupCircle.frequency }
                             ?: Frequency.MONTHLY,
                         startDateEpochDay = backupCircle.startDateEpochDay,
-                        createdAtMillis = backupCircle.createdAtMillis
+                        createdAtMillis = backupCircle.createdAtMillis,
+                        orderLocked = backupCircle.orderLocked
                     )
                 )
 

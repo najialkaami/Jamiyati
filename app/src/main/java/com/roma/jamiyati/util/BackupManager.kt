@@ -25,6 +25,7 @@ data class BackupCircle(
     val frequency: String,
     val startDateEpochDay: Long,
     val createdAtMillis: Long,
+    val orderLocked: Boolean = false,
     val members: List<BackupMember>,
     val payments: List<BackupPayment>
 )
@@ -63,6 +64,7 @@ object BackupManager {
                     frequency = details.circle.frequency.name,
                     startDateEpochDay = details.circle.startDateEpochDay,
                     createdAtMillis = details.circle.createdAtMillis,
+                    orderLocked = details.circle.orderLocked,
                     members = details.members.map { m ->
                         BackupMember(
                             originalId = m.id,

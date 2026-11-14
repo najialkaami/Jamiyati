@@ -24,6 +24,10 @@ data class CircleDetailUiState(
     val currentRoundNumber: Int = 1,
     val lateMembers: List<MemberEntity> = emptyList(),
     val isDrawing: Boolean = false,
+    /** الترتيب معتمد نهائياً (بعد القرعة أو الاعتماد اليدوي) */
+    val orderLocked: Boolean = false,
+    /** جميع المشتركين لديهم اسم ورقم هاتف صحيح، فيمكن اعتماد الترتيب */
+    val membersComplete: Boolean = false,
     val highlightedMemberId: Long? = null,
     val isLoading: Boolean = true
 )
@@ -55,6 +59,10 @@ class CircleDetailViewModel(
                 currentRoundNumber = currentRound,
                 lateMembers = RoundCalculator.getLateMembersForRound(details, currentRound),
                 isDrawing = isDrawing,
+                orderLocked = details.circle.orderLocked,
+                membersComplete = details.members.size >= 2 && details.members.all {
+                    it.name.isNotBlank() && it.phone.filter(Char::isDigit).length >= 9
+                },
                 highlightedMemberId = highlightedId,
                 isLoading = false
             )
@@ -66,6 +74,7 @@ class CircleDetailViewModel(
     )
 
     fun moveMember(fromIndex: Int, toIndex: Int) {
+        if (uiState.value.orderLocked) return
         val currentList = uiState.value.sortedMembers.toMutableList()
         if (fromIndex !in currentList.indices || toIndex !in currentList.indices || fromIndex == toIndex) {
             return
@@ -79,7 +88,18 @@ class CircleDetailViewModel(
         }
     }
 
+    /** اعتماد الترتيب الحالي نهائياً */
+    fun confirmOrder() {
+        val state = uiState.value
+        if (state.orderLocked || !state.membersComplete) return
+        viewModelScope.launch {
+            repository.updateMembersPayoutOrder(state.sortedMembers)
+            repository.lockOrder(circleId)
+        }
+    }
+
     fun persistMemberOrder(reordered: List<MemberEntity>) {
+        if (uiState.value.orderLocked) return
         previewMembersFlow.value = reordered
         viewModelScope.launch {
             repository.updateMembersPayoutOrder(reordered)
@@ -88,8 +108,9 @@ class CircleDetailViewModel(
     }
 
     fun runRandomDraw() {
-        val members = uiState.value.sortedMembers
-        if (members.size < 2 || isDrawingFlow.value) return
+        val state = uiState.value
+        val members = state.sortedMembers
+        if (members.size < 2 || isDrawingFlow.value || state.orderLocked || !state.membersComplete) return
 
         viewModelScope.launch {
             isDrawingFlow.value = true
@@ -103,6 +124,8 @@ class CircleDetailViewModel(
             previewMembersFlow.value = finalOrder
             highlightedMemberIdFlow.value = finalOrder.firstOrNull()?.id
             repository.updateMembersPayoutOrder(finalOrder)
+            // القرعة تُجرى مرة واحدة فقط: نقفل الترتيب مباشرة
+            repository.lockOrder(circleId)
             delay(450L)
             highlightedMemberIdFlow.value = null
             previewMembersFlow.value = null

@@ -227,11 +227,23 @@ fun CircleEditorScreen(
                         text = "المشتركون (${uiState.members.size})",
                         style = MaterialTheme.typography.titleMedium
                     )
-                    FilledTonalButton(onClick = viewModel::addMemberRow) {
-                        Icon(Icons.Rounded.Add, contentDescription = null)
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("إضافة مشترك")
+                    if (!uiState.orderLocked) {
+                        FilledTonalButton(onClick = viewModel::addMemberRow) {
+                            Icon(Icons.Rounded.Add, contentDescription = null)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("إضافة مشترك")
+                        }
                     }
+                }
+            }
+
+            if (uiState.orderLocked) {
+                item {
+                    Text(
+                        text = "🔒 ترتيب القبض معتمد: لا يمكن إضافة أو حذف مشتركين. يمكنك فقط تصحيح الأسماء والأرقام.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error
+                    )
                 }
             }
 
@@ -252,12 +264,14 @@ fun CircleEditorScreen(
                                 style = MaterialTheme.typography.labelLarge,
                                 color = MaterialTheme.colorScheme.primary
                             )
-                            IconButton(onClick = { viewModel.removeMemberRow(member.localKey) }) {
-                                Icon(
-                                    imageVector = Icons.Rounded.PersonRemove,
-                                    contentDescription = "إزالة المشترك",
-                                    tint = MaterialTheme.colorScheme.error
-                                )
+                            if (!uiState.orderLocked) {
+                                IconButton(onClick = { viewModel.removeMemberRow(member.localKey) }) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.PersonRemove,
+                                        contentDescription = "إزالة المشترك",
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                }
                             }
                         }
                         OutlinedTextField(

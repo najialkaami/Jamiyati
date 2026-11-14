@@ -28,7 +28,10 @@ import androidx.compose.material.icons.rounded.Casino
 import androidx.compose.material.icons.rounded.DragHandle
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.PictureAsPdf
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -52,6 +55,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -199,6 +203,7 @@ fun CircleDetailScreen(
             when (selectedTab) {
                 0 -> RoundsScheduleTab(
                     schedule = uiState.schedule,
+                    orderLocked = uiState.orderLocked,
                     onOpenRound = onOpenRound
                 )
                 1 -> LateMembersTab(
@@ -210,9 +215,12 @@ fun CircleDetailScreen(
                 2 -> PayoutOrderTab(
                     members = uiState.sortedMembers,
                     isDrawing = uiState.isDrawing,
+                    orderLocked = uiState.orderLocked,
+                    membersComplete = uiState.membersComplete,
                     highlightedMemberId = uiState.highlightedMemberId,
                     onMoveMember = viewModel::moveMember,
-                    onRandomDraw = viewModel::runRandomDraw
+                    onRandomDraw = viewModel::runRandomDraw,
+                    onConfirmOrder = viewModel::confirmOrder
                 )
             }
         }
@@ -222,23 +230,51 @@ fun CircleDetailScreen(
 @Composable
 private fun RoundsScheduleTab(
     schedule: List<RoundScheduleItem>,
+    orderLocked: Boolean,
     onOpenRound: (Int) -> Unit
 ) {
     LazyColumn(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
+        if (!orderLocked) {
+            item {
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "⚠ ترتيب القبض لم يُعتمد بعد. افتح تبويب «ترتيب القبض» واعتمده أو أجرِ القرعة.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                        modifier = Modifier.padding(12.dp)
+                    )
+                }
+            }
+        }
         itemsIndexed(schedule, key = { _, item -> item.roundNumber }) { _, round ->
+            val receiverName = round.receiver?.name ?: "غير محدد"
+            val date = DateFormatterAr.formatEpochDay(round.dateEpochDay)
+            val faded = round.status == RoundStatus.DONE || round.status == RoundStatus.UPCOMING
+            val canOpen = round.status != RoundStatus.UPCOMING
             val containerColor = when (round.status) {
                 RoundStatus.CURRENT -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
-                RoundStatus.DONE -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+                RoundStatus.DONE -> MaterialTheme.colorScheme.surfaceVariant
+                RoundStatus.INCOMPLETE -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f)
                 RoundStatus.UPCOMING -> MaterialTheme.colorScheme.surface
             }
             Card(
                 onClick = { onOpenRound(round.roundNumber) },
-                colors = CardDefaults.cardColors(containerColor = containerColor),
+                enabled = canOpen,
+                colors = CardDefaults.cardColors(
+                    containerColor = containerColor,
+                    disabledContainerColor = containerColor
+                ),
                 shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .alpha(if (faded) 0.5f else 1f)
             ) {
                 Row(
                     modifier = Modifier
@@ -249,20 +285,39 @@ private fun RoundsScheduleTab(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "الجولة ${round.roundNumber} · ${round.status.labelAr}",
+                            text = when (round.status) {
+                                RoundStatus.DONE -> "الجولة ${round.roundNumber} · منتهية ✓"
+                                RoundStatus.UPCOMING -> "الجولة ${round.roundNumber} · قادمة 🔒"
+                                else -> "الجولة ${round.roundNumber} · ${round.status.labelAr}"
+                            },
                             style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            color = if (round.status == RoundStatus.INCOMPLETE) MaterialTheme.colorScheme.error
+                            else MaterialTheme.colorScheme.onSurface
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "المستلم: ${round.receiver?.name ?: "غير محدد"}",
-                            style = MaterialTheme.typography.bodyMedium
+                            text = when (round.status) {
+                                RoundStatus.DONE -> "تم استلام المبلغ: $receiverName"
+                                RoundStatus.CURRENT -> "المستحق الآن: $receiverName"
+                                else -> "المستحق: $receiverName"
+                            },
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = if (round.status == RoundStatus.CURRENT) FontWeight.Bold else FontWeight.Normal
                         )
                         Text(
-                            text = "التاريخ: ${DateFormatterAr.formatEpochDay(round.dateEpochDay)} · تم السداد: ${round.paidCount}/${round.totalMembers}",
+                            text = if (round.status == RoundStatus.UPCOMING) "تُفتح بتاريخ: $date" else "التاريخ: $date",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        if (round.status != RoundStatus.UPCOMING) {
+                            Text(
+                                text = "تم السداد: ${round.paidCount} من ${round.totalMembers}",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = if (round.status == RoundStatus.INCOMPLETE) MaterialTheme.colorScheme.error
+                                else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                     Column(horizontalAlignment = Alignment.End) {
                         Text(
@@ -270,12 +325,21 @@ private fun RoundsScheduleTab(
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.primary
                         )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "تسجيل الدفعات",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.secondary
-                        )
+                        val action = when (round.status) {
+                            RoundStatus.CURRENT -> "تسجيل الدفعات"
+                            RoundStatus.INCOMPLETE -> "إكمال الدفعات"
+                            RoundStatus.DONE -> "عرض"
+                            RoundStatus.UPCOMING -> null
+                        }
+                        if (action != null) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = action,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = if (round.status == RoundStatus.INCOMPLETE) MaterialTheme.colorScheme.error
+                                else MaterialTheme.colorScheme.secondary
+                            )
+                        }
                     }
                 }
             }
@@ -379,35 +443,86 @@ private fun LateMembersTab(
 private fun PayoutOrderTab(
     members: List<MemberEntity>,
     isDrawing: Boolean,
+    orderLocked: Boolean,
+    membersComplete: Boolean,
     highlightedMemberId: Long?,
     onMoveMember: (Int, Int) -> Unit,
-    onRandomDraw: () -> Unit
+    onRandomDraw: () -> Unit,
+    onConfirmOrder: () -> Unit
 ) {
     var draggingIndex by remember { mutableStateOf<Int?>(null) }
     var dragOffsetY by remember { mutableFloatStateOf(0f) }
+    var confirmDraw by remember { mutableStateOf(false) }
+    var confirmManual by remember { mutableStateOf(false) }
+    val editable = !orderLocked && !isDrawing
 
     Column(modifier = Modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "اسحب مطولاً لإعادة الترتيب أو أجرِ قرعة",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.weight(1f)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Button(
-                onClick = onRandomDraw,
-                enabled = !isDrawing && members.size >= 2
+        if (orderLocked && !isDrawing) {
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.primaryContainer,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
             ) {
-                Icon(Icons.Rounded.Casino, contentDescription = null)
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(if (isDrawing) "جاري السحب..." else "قرعة عشوائية")
+                Column(Modifier.padding(14.dp)) {
+                    Text(
+                        text = "🔒 الترتيب معتمد نهائياً",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    Text(
+                        text = "لا يمكن تغيير ترتيب القبض أو إعادة القرعة، حفاظاً على حقوق جميع المشتركين.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+            }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+            ) {
+                Text(
+                    text = "رتّب المشتركين بالأسهم ثم اضغط «اعتماد الترتيب»، أو أجرِ قرعة عشوائية.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "تنبيه: الاعتماد أو القرعة يتم مرة واحدة فقط، ولا يمكن تغيير الترتيب بعدها.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.error
+                )
+                if (!membersComplete) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "أكمل أسماء وأرقام هواتف جميع المشتركين أولاً (زر التعديل ✎ في الأعلى).",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    Button(
+                        onClick = { confirmDraw = true },
+                        enabled = editable && membersComplete,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Rounded.Casino, contentDescription = null)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(if (isDrawing) "جاري السحب..." else "قرعة عشوائية")
+                    }
+                    OutlinedButton(
+                        onClick = { confirmManual = true },
+                        enabled = editable && membersComplete,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("اعتماد الترتيب")
+                    }
+                }
             }
         }
 
@@ -431,6 +546,39 @@ private fun PayoutOrderTab(
                     label = "drawColor"
                 )
 
+                val dragModifier = if (editable) {
+                    Modifier.pointerInput(members.size, index) {
+                        detectDragGesturesAfterLongPress(
+                            onDragStart = {
+                                draggingIndex = index
+                                dragOffsetY = 0f
+                            },
+                            onDrag = { change, dragAmount ->
+                                change.consume()
+                                dragOffsetY += dragAmount.y
+                                val thresholdPx = 110f
+                                if (dragOffsetY > thresholdPx && index < members.lastIndex) {
+                                    onMoveMember(index, index + 1)
+                                    draggingIndex = index + 1
+                                    dragOffsetY = 0f
+                                } else if (dragOffsetY < -thresholdPx && index > 0) {
+                                    onMoveMember(index, index - 1)
+                                    draggingIndex = index - 1
+                                    dragOffsetY = 0f
+                                }
+                            },
+                            onDragEnd = {
+                                draggingIndex = null
+                                dragOffsetY = 0f
+                            },
+                            onDragCancel = {
+                                draggingIndex = null
+                                dragOffsetY = 0f
+                            }
+                        )
+                    }
+                } else Modifier
+
                 Card(
                     colors = CardDefaults.cardColors(containerColor = bgColor),
                     shape = RoundedCornerShape(14.dp),
@@ -441,36 +589,7 @@ private fun PayoutOrderTab(
                             IntOffset(0, if (isDragging) dragOffsetY.roundToInt() else 0)
                         }
                         .scale(scale)
-                        .pointerInput(members.size, index) {
-                            detectDragGesturesAfterLongPress(
-                                onDragStart = {
-                                    draggingIndex = index
-                                    dragOffsetY = 0f
-                                },
-                                onDrag = { change, dragAmount ->
-                                    change.consume()
-                                    dragOffsetY += dragAmount.y
-                                    val thresholdPx = 110f
-                                    if (dragOffsetY > thresholdPx && index < members.lastIndex) {
-                                        onMoveMember(index, index + 1)
-                                        draggingIndex = index + 1
-                                        dragOffsetY = 0f
-                                    } else if (dragOffsetY < -thresholdPx && index > 0) {
-                                        onMoveMember(index, index - 1)
-                                        draggingIndex = index - 1
-                                        dragOffsetY = 0f
-                                    }
-                                },
-                                onDragEnd = {
-                                    draggingIndex = null
-                                    dragOffsetY = 0f
-                                },
-                                onDragCancel = {
-                                    draggingIndex = null
-                                    dragOffsetY = 0f
-                                }
-                            )
-                        }
+                        .then(dragModifier)
                 ) {
                     Row(
                         modifier = Modifier
@@ -478,12 +597,14 @@ private fun PayoutOrderTab(
                             .padding(horizontal = 12.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Rounded.DragHandle,
-                            contentDescription = "اسحب للترتيب",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
+                        if (editable) {
+                            Icon(
+                                imageVector = Icons.Rounded.DragHandle,
+                                contentDescription = "اسحب للترتيب",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                        }
                         Surface(
                             shape = RoundedCornerShape(10.dp),
                             color = MaterialTheme.colorScheme.primaryContainer
@@ -506,21 +627,63 @@ private fun PayoutOrderTab(
                                 softWrap = false
                             )
                         }
-                        IconButton(
-                            onClick = { onMoveMember(index, index - 1) },
-                            enabled = index > 0 && !isDrawing
-                        ) {
-                            Icon(Icons.Rounded.ArrowUpward, contentDescription = "تقديم")
-                        }
-                        IconButton(
-                            onClick = { onMoveMember(index, index + 1) },
-                            enabled = index < members.lastIndex && !isDrawing
-                        ) {
-                            Icon(Icons.Rounded.ArrowDownward, contentDescription = "تأخير")
+                        if (editable) {
+                            IconButton(
+                                onClick = { onMoveMember(index, index - 1) },
+                                enabled = index > 0
+                            ) {
+                                Icon(Icons.Rounded.ArrowUpward, contentDescription = "تقديم")
+                            }
+                            IconButton(
+                                onClick = { onMoveMember(index, index + 1) },
+                                enabled = index < members.lastIndex
+                            ) {
+                                Icon(Icons.Rounded.ArrowDownward, contentDescription = "تأخير")
+                            }
                         }
                     }
                 }
             }
         }
+    }
+
+    if (confirmDraw) {
+        AlertDialog(
+            onDismissRequest = { confirmDraw = false },
+            title = { Text("إجراء القرعة") },
+            text = {
+                Text(
+                    "القرعة تُجرى مرة واحدة فقط، ونتيجتها نهائية ولا يمكن تغييرها أو إعادتها.\n" +
+                        "تأكد أن جميع المشتركين (${members.size}) مضافون بأسمائهم وأرقامهم الصحيحة."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmDraw = false
+                    onRandomDraw()
+                }) { Text("إجراء القرعة") }
+            },
+            dismissButton = { TextButton(onClick = { confirmDraw = false }) { Text("إلغاء") } }
+        )
+    }
+
+    if (confirmManual) {
+        AlertDialog(
+            onDismissRequest = { confirmManual = false },
+            title = { Text("اعتماد الترتيب") },
+            text = {
+                Text(
+                    "سيتم اعتماد الترتيب الظاهر نهائياً، ولا يمكن تغييره أو إجراء قرعة بعده.\n" +
+                        "الأول في القائمة يقبض في الجولة الأولى، وهكذا."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmManual = false
+                    onConfirmOrder()
+                }) { Text("اعتماد") }
+            },
+            dismissButton = { TextButton(onClick = { confirmManual = false }) { Text("إلغاء") } }
+        )
     }
 }

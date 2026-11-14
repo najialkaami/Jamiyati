@@ -5,6 +5,8 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [
@@ -12,7 +14,7 @@ import androidx.room.TypeConverters
         MemberEntity::class,
         RoundPaymentEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -20,6 +22,13 @@ abstract class JamiyatiDatabase : RoomDatabase() {
     abstract fun jamiyatiDao(): JamiyatiDao
 
     companion object {
+        /** إضافة عمود قفل الترتيب دون حذف بيانات المستخدم */
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE circles ADD COLUMN orderLocked INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         @Volatile
         private var INSTANCE: JamiyatiDatabase? = null
 
@@ -30,6 +39,7 @@ abstract class JamiyatiDatabase : RoomDatabase() {
                     JamiyatiDatabase::class.java,
                     "jamiyati_offline.db"
                 )
+                    .addMigrations(MIGRATION_1_2)
                     .fallbackToDestructiveMigration()
                     .build()
                     .also { INSTANCE = it }
